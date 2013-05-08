@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Example</title>
+    </head>
+    <body>
+        Articles
+        <div id="result">
+        <ul>
+            {% for entry in test_entries %}
+            <li>{{entry.name}}</li>
+            {% endfor %}
+        </ul>
+        </div>
+        <input type="text" id="myinput"/>
+        <button id="mybutton">Click</button>
+    </body>
+</html>
