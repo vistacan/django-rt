@@ -2,8 +2,8 @@ Django RT - realtime web for django
 ===================================
 
 `django_rt` is a Django application to enable realtime web programming for
-Django. It relies heavily on `socket.io` and `jquery` and is inspired by
-`meteor.js`.
+Django. It relies heavily on [socket.io](socket.io) and [jQuery](jquery.com)
+and is inspired by [Meteor](meteor.com).
 
 Current satus
 -------------
