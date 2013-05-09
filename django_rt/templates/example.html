@@ -1,18 +1,18 @@
-<!DOCTYPE html>
-<html>
-    <head>
-        <title>Example</title>
-    </head>
-    <body>
-        Articles
-        <div id="result">
-        <ul>
+{% extends 'base.html' %}
+{% block title %}Example{% endblock %}
+{% block contents %}
+    <h1>Test objects</h1>
+    <div id="result">
+        <table class="table table-hover table-bordered">
+            <tbody>
             {% for entry in test_entries %}
-            <li>{{entry.name}}</li>
+            <tr><td>{{entry.name}}</td></tr>
             {% endfor %}
-        </ul>
+            </tbody>
+        </table>
         </div>
-        <input type="text" id="myinput"/>
-        <button id="mybutton">Click</button>
-    </body>
-</html>
+        <div class="input-append">
+        <input type="text" id="myinput" class="input"/>
+        <button class="btn" id="mybutton">Click</button>
+    </div>
+{% endblock %}

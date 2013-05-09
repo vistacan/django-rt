@@ -13,7 +13,10 @@ function handler (req, res) {
 
 function poll(queue_name, redis_client) {
     redis_client.blpop(queue_name, 0, function(err, data){
-        console.warn('Found data in queue: ' + queue_name + '\n    data: ' + data);
+        console.warn('Found data in queue: ' + 
+		     queue_name + 
+		     '\n    data: ' + 
+		     data);
         io.sockets.in(queue_name).emit(queue_name, data[1])
     });
 }

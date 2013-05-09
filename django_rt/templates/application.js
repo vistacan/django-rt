@@ -66,10 +66,6 @@ function init_socket(){
             }
         });
     });
-    
-    //socket.on('disconnect', function(){
-    //    init_socket(true);
-    //});
 }
 
 
@@ -151,35 +147,43 @@ function rtinit(){
     
     // for{ {% for event_dict in events %}
         // for{ {% for event_id, event_tuple in event_dict.iteritems %}
-            // event_id -> (self_, func, name, query, dict(zip(args, defaults)))
-            $('{{event_tuple.3}}').one('{{event_tuple.2}}', function(eventObject){
+            // event_id -> (
+            //     self_, func, name, query, dict(zip(args, defaults)))
+            $('{{event_tuple.3}}').one(
+		'{{event_tuple.2}}', 
+		function(eventObject){
     
-                var headers = {};
-                headers['X-CSRFToken'] = $.cookie('csrftoken');
-                headers['X-Event-Id'] = '{{event_id}}';
+                    var headers = {},
+                        csrf = $.cookie('csrftoken');
+                
+                    headers['X-CSRFToken'] = csrf;
+                    headers['X-Event-Id'] = '{{event_id}}';
     
-                // Collect the required data to be send to the server
-                // as specified inside the server side registered event handler
-                // function with keyword arguments and default values.
-                var data = {};
-                // for{ {% for k, v in event_tuple.4.iteritems %}
-                data['{{k}}'] = getValue('{{v}}');
-                // } {% endfor %}
+                    // Collect the required data to be send to the server
+                    // as specified inside the server side registered event 
+		    // handler function with keyword arguments and default 
+		    // values
+                    var data = {};
+                    // for{ {% for k, v in event_tuple.4.iteritems %}
+                    data['{{k}}'] = getValue('{{v}}');
+                    // } {% endfor %}
     
-                $.ajax({
-                    url: document_url,
-                    type: 'POST',
-                    dataType: 'json',
-                    headers: headers,
-                    data: data,
-                    success: function(data, textStatus, jqXHR) {
-                        data = eval(data);
-                        $(data['target_query']).html(data['body']);
-                        rtinit(); // re-init
-                    },
-                    error: function() { alert('Error'); }
-                });
-            });
+                    $.ajax({
+			url: document_url,
+			type: 'POST',
+			dataType: 'json',
+			headers: headers,
+			data: data,
+			success: function(data, textStatus, jqXHR) {
+                            data = eval(data);
+                            $(data['target_query']).html(data['body']);
+                            rtinit(); // re-init
+			},
+			error: function() { 
+			    alert('Error, your csrftoken is '+csrf); 
+			}
+                    });
+		});
         // } {% endfor %}
     // } {% endfor %}
 

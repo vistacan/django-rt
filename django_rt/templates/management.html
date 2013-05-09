@@ -1,25 +1,22 @@
-<!DOCTYPE html>
-<html>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link href="/static/bootstrap/css/bootstrap.min.css" rel="stylesheet" media="screen">
-  <body>
-    <div class="container">
+{% extends 'base.html' %}
+{% block title %}Django RT - management{% endblock %}
+{% block contents %}
     <h1>Django RT - management</h1>
     <h2>Queues and channels</h2>
     <table class='table table-bordered table-hover'>
         <thead>
         <tr>
             <th>Channel Id</th>
-            <th>Channel contents</th>
+            <th>Channel watchlist</th>
         </tr>
         </thead>
         <tbody>
-        {% for id, contents in watchlist.iteritems %}
+        {% for id, watchlist in watchlist.iteritems %}
         <tr>
             <td>{{id}}</td>
             <td>
                 <ul class="unstyled">
-                    {% for val in contents %}
+                    {% for val in watchlist %}
                     <li>{{val}}</li>
                     {% endfor %}
                 </ul>
@@ -28,7 +25,4 @@
         {% endfor %}
         </tbody>
     </table>
-    </div>
-    <script src="/static/bootstrap/js/bootstrap.min.js"></script>
-  </body>
-</html>
+{% endblock %}

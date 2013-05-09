@@ -1,6 +1,7 @@
 from django.conf.urls import patterns, include, url
 from views import RTJavascriptEvents, RTManagement
 from example import ExampleView
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 urlpatterns = patterns('',
     # Examples:
@@ -8,7 +9,7 @@ urlpatterns = patterns('',
     # url(r'^django_rt/', include('django_rt.foo.urls')),
     
     url(r'^rt/admin', RTManagement.as_view(), name='admin'),
-    url(r'^rt/application.js', RTJavascriptEvents.as_view(), name='application_js'),
+    url(r'^rt/application.js', ensure_csrf_cookie(RTJavascriptEvents.as_view()), name='application_js'),
     url(r'^rt/.*', ExampleView.as_view(), name='example'),
 
     # Uncomment the admin/doc line below to enable admin documentation:

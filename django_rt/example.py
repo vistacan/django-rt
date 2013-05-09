@@ -13,4 +13,4 @@ class ExampleView(RTView):
     
     @RTView.event('click', '#mybutton')
     def mybutton_click(self, request, myinput='#myinput'):
-        return RTResponse('#result', 'Result! '+myinput)
+        return RTResponse('#result', '<div class="well">Result! '+myinput+'</div>')

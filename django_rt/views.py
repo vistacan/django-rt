@@ -4,64 +4,38 @@ from django.http import HttpResponse
 from django.conf import settings
 from django.db.models import Model
 from django.db.models.query import QuerySet
-from django.utils.safestring import SafeString
-from django.contrib.contenttypes.models import ContentType
+from django.core.urlresolvers import reverse
 
-from util import itersubclasses, Proxy
+from util import itersubclasses
+from models import RTModelProxy
 
-from functools import wraps
-from inspect import getargspec
 from urllib import quote
 import json
 from uuid import uuid4
 import redis
-
+from inspect import getargspec
 
 redis_pool = redis.ConnectionPool()
 HTTP_X_EVENT_ID = 'HTTP_X_EVENT_ID'
-
-
-class RTModelProxy(object):
-    '''
-    A proxy for Model instances. After inspecting the template context
-    any Model instance will be wrapped in an instance of RTModelProxy.
-    The proxy does no modifications to the Model or data it wraps any
-    attribute retrieved into a string:
-        "<!--`object-identifier`-->`original`<!--/`object-identifier`-->
-    so the client side script can relocate and modify its value when
-    database entries change.
-    '''
-    
-    def __init__(self, obj):
-        self._obj = obj # the model instance wrapped
-        ct = ContentType.objects.get_for_model(obj)
-        
-        # construct the object-identifier its format is:
-        # <app_label>%<name>%<pk>
-        object_identifier = ct.app_label+'%'+ct.model+'%'+str(obj.pk)
-        self._object_identifier = object_identifier
-        
-        redis_connection = redis.Redis(connection_pool=redis_pool)
-        
-        # the channellist is a redis `set` that contains all channels
-        # bound to unique client sessions.
-        channellist = redis_connection.smembers(settings.REDIS_KEY_CHANNELLIST) or []
-        for channel in channellist:
-            # each client session (channel) has a redis `set` containing
-            # object identifiers to keep watch of and update when database
-            # values change -> whatchlist
-            redis_connection.sadd(settings.REDIS_KEY_PREFIX_WATCHLIST+channel, object_identifier)
-    
-    def __getattribute__(self, name):
-        '''
-        Wrap all attributes retrieved in comments containing this object_identifier.
-        TODO: Handle relationships.
-        '''
-        attr = getattr(object.__getattribute__(self, "_obj"), name)
-        object_identifier = object.__getattribute__(self, "_object_identifier")
-        ostr = '<!--%s-->' % (object_identifier + '%' + name)
-        cstr = '<!--/%s-->' % (object_identifier + '%' + name)
-        return SafeString(ostr + attr + cstr)
+RT_SCRIPT = '''
+<script type="text/javascript"
+    src="//ajax.googleapis.com/ajax/libs/jquery/2.0.0/jquery.min.js">
+</script>
+<script type="text/javascript" src="/static/jquery.cookie.js"></script>
+<script type="text/javascript" src="/static/util.js"></script>
+<script type="text/javascript">
+    script("%s", function(){
+        console.log('Loaded: application.js');
+        script(
+            "//"+document.domain+":8080/socket.io/socket.io.js",
+            function(){
+                console.log('Loaded: socket.io.js');
+                init_socket();
+            }
+        );
+    });
+</script>
+'''
 
 
 class RTTemplateResponse(TemplateResponse):
@@ -150,7 +124,11 @@ class RTView(TemplateView):
         No need to override this method.
         TODO: Graceful error handling
         '''
-        if all([request.is_ajax(), request.method == 'POST', HTTP_X_EVENT_ID in request.META]):
+        if all([
+            request.is_ajax(),
+            request.method == 'POST',
+            HTTP_X_EVENT_ID in request.META
+        ]):
             request_data = {}
             request_data.update(request.POST)
             kwargs = {}
@@ -162,22 +140,38 @@ class RTView(TemplateView):
                 kwargs[str(k)] = v
                 
             # retrieve the decorated function
-            handler_info =  self.__class__.events[request.META[HTTP_X_EVENT_ID]]
+            handler_info =  self.__class__.events[
+                request.META[HTTP_X_EVENT_ID]]
             
             # handler_info is a tuple (instance, function)
             
             try:
                 # call the decorated function
-                response = handler_info[1](handler_info[0], request, **kwargs)
+                response = handler_info[1](
+                    handler_info[0], request, **kwargs)
+            
             except Exception, e:
                 if settings.DEBUG:
                     # graceful error handling
-                    response = HttpResponse('Error')
+                    response = HttpResponse('Error' + str(e))
                 else:
                     raise
             return response
         
-        return super(RTView, self).dispatch(request, *args, **kwargs)
+        def inject_javascript(resp):
+            # inject required javascripts
+                
+            pos = resp.content.find('</head>')
+            if pos != -1:
+                resp.content = resp.content[:pos] + (
+                    RT_SCRIPT % reverse('application_js')
+                ) + resp.content[pos:]
+        
+        response = super(RTView, self).dispatch(request, *args, **kwargs)
+        response.add_post_render_callback(inject_javascript)
+        
+        return response
+        
     
     @classmethod
     def compute_event_id(cls, func, name, query):
@@ -214,10 +208,12 @@ class RTView(TemplateView):
             
             # do not allow duplicates
             if event_id in cls.events:
-                raise Exception('Event seems already registered? %s' % str(cls.events[event_id]))
+                raise Exception('Event seems already registered? %s' % str(
+                    cls.events[event_id]))
             
             # register the event
-            cls.events[event_id] = (self_, func, name, query, dict(zip(args, defaults)))
+            cls.events[event_id] = (self_, func, name, query, dict(zip(
+                args, defaults)))
             
             return func
 
@@ -228,7 +224,7 @@ class RTJavascriptEvents(TemplateView):
     '''
     Dynamic javascript response responsible for all client side interaction.
     
-    Any plain/html response gets this script injected through the middleware.
+    Any RTView generated response gets this script injected.
     
     The template passes the channel name and registered events to the client.
     '''
@@ -276,8 +272,11 @@ class RTManagement(TemplateView):
         context = super(RTManagement, self).get_context_data(**kwargs)
         
         queues = {}
-        for channel_name in redis_connection.smembers(settings.REDIS_KEY_CHANNELLIST):
-            queues[channel_name] = redis_connection.smembers(settings.REDIS_KEY_PREFIX_WATCHLIST+channel_name)
+        for channel_name in redis_connection.smembers(
+            settings.REDIS_KEY_CHANNELLIST
+        ):
+            queues[channel_name] = redis_connection.smembers(
+                settings.REDIS_KEY_PREFIX_WATCHLIST+channel_name)
         
         context['watchlist'] = queues
         
@@ -288,7 +287,7 @@ class RTResponse(HttpResponse):
     '''
     An HttpResponse subclass meant to be used for client side event
     results. The RTResponse needs next to its body contents, a jQuery
-    std query string to determine where this response will be
+    std query string to deter?ne where this response will be
     injected into the DOM.
     '''
     def __init__(self, target_query, body):
