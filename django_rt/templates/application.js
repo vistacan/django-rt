@@ -36,6 +36,10 @@ var watchlist={};
 var socket=null;
 
 
+// Collection of client side events
+var events = {};
+
+
 // Initialize the connection to the server
 function init_socket(){
     // {% comment %}
@@ -75,12 +79,19 @@ function update_watched_object(obj, identifier){
     for(k in watchlist){
         // k is of format '<app_label>%<model_name>%<pk>%<field_name>'
         // but the `identifier` does not contian the field name
-        // it identifies the full obj (which is a model instance repr)
+        // it identifies the full obj which is a model instance repr or
+	// an object ({emit:'event_id'}) 
+	// in case a query was updated
         if(k.indexOf(identifier)==0){
-            // get the field name and update the DOM
-            field_name = k.replace(identifier, '').substring(1);
-            // the element is a text element so we use the `data` attribute
-            watchlist[k].data = obj[field_name];
+	    if('emit' in obj && obj.emit in events){
+		//emit it!
+		events[obj.emit]();
+	    } else {
+		// get the field name and update the DOM
+		field_name = k.replace(identifier, '').substring(1);
+		// the element is a text element so we use `data`
+		watchlist[k].data = obj[field_name];
+	    }
         }
     }
 }
@@ -137,7 +148,6 @@ function build_watchlist(jqresult){
     }
 }
 
-
 // Main initializer function for Django RT.
 // This function is executed after each event!
 function rtinit(){
@@ -151,13 +161,15 @@ function rtinit(){
         // for{ {% for event_id, event_tuple in event_dict.iteritems %}
             // event_id -> (
             //     self_, func, name, query, dict(zip(args, defaults)))
+    events['{{event_id}}'] = 
+	function(){
             $('{{event_tuple.3}}').one(
 		'{{event_tuple.2}}', 
 		function(eventObject){
-    
+		
                     var headers = {},
-                        csrf = $.cookie('csrftoken');
-                
+                    csrf = $.cookie('csrftoken');
+                    
                     headers['X-CSRFToken'] = csrf;
                     headers['X-Event-Id'] = '{{event_id}}';
     
@@ -186,8 +198,13 @@ function rtinit(){
 			}
                     });
 		});
+	};
         // } {% endfor %}
     // } {% endfor %}
+
+    for(event_id in events){
+	events[event_id]();
+    }
 
     build_watchlist($('body'));
 

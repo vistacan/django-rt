@@ -8,6 +8,7 @@
         <tr>
             <th>Channel Id</th>
             <th>Channel watchlist</th>
+            <!--<th>Events</th>-->
         </tr>
         </thead>
         <tbody>
@@ -16,11 +17,18 @@
             <td>{{id}}</td>
             <td>
                 <ul class="unstyled">
-                    {% for val in watchlist %}
+                    {% for val in watchlist.0 %}
                     <li>{{val}}</li>
                     {% endfor %}
                 </ul>
             </td>
+	    <!--<td>
+                <ul class="unstyled">
+                    {% for val in watchlist.1 %}
+                    <li>{{val}}</li>
+                    {% endfor %}
+                </ul>
+	    </td>-->
         </tr>
         {% endfor %}
         </tbody>

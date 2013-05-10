@@ -12,6 +12,7 @@ from django.forms.models import model_to_dict
 from util import itersubclasses
 
 from urllib import quote
+from functools import wraps
 import json
 from uuid import uuid4
 import redis
@@ -42,7 +43,7 @@ RT_SCRIPT = '''
 '''
 
 
-class Struct:
+class Struct():
     def __init__(self, **entries):
         self.__dict__.update(entries)
 
@@ -129,11 +130,53 @@ class RTObservable(object):
                     _name == name,
                     _pk == str(id)
                 ]):
-                    redis_connection.rpush(
-                        channel,
-                        json.dumps({descriptor:obj}))
+                    if not _pk == 'Q':
+                        redis_connection.rpush(
+                            channel,
+                            json.dumps({descriptor:obj}))
+                    else:
+                        # this is query, somehow we need to
+                        # find out which client-side event to
+                        # emit on the client and send
+                        # {emit:[source_query, event_name]}
+                        # to the client
+                        eventids = redis_connection.smembers(
+                            (
+                                app_label +
+                                '%' +
+                                name +
+                                '%' +
+                                str(id)
+                            ))
+                        for event_id in eventids:
+                            redis_connection.rpush(
+                                channel,
+                                json.dumps({'emit':event_id})
+                            )
 
 
+class RTQueryProxy(RTObservable):
+    '''
+    a proxy for QuerySet instances.
+    '''
+    def __init__(self, qs):
+        ct = ContentType.objects.get_for_model(qs.model)
+        setattr(qs, '__content', '') # this is a wrapper event
+        super(RTQueryProxy, self).__init__(
+            ct.model,
+            {},
+            ct.app_label,
+            'Q'
+        )
+
+    @classmethod
+    def emit_change(cls, obj):
+        ct = ContentType.objects.get_for_model(obj)
+        RTObservable.emit_change(
+            ct.model, {}, ct.app_label, 'Q')
+        
+
+                    
 class RTModelProxy(RTObservable):
     '''
     A proxy for Model instances. After inspecting the template context
@@ -155,7 +198,7 @@ class RTModelProxy(RTObservable):
         )
 
     @classmethod
-    def emit_change(cls, obj, app_label=None, id=None):
+    def emit_change(cls, obj):
         ct = ContentType.objects.get_for_model(obj)
         RTObservable.emit_change(
             ct.model, model_to_dict(obj), ct.app_label, obj.pk)
@@ -165,20 +208,28 @@ class RTTemplateResponse(TemplateResponse):
     A TemplateResponse subclass to inspect the context and wrap all
     model instances into `RTModelProxy` instances.
     '''
-
+    
     def __init__(self, *args, **kwargs):
         target_query = kwargs.pop('target_query', None)
         if not target_query is None:
             kwargs.update({'content_type': 'application/json'})
         super(RTTemplateResponse, self).__init__(*args, **kwargs)
         self.target_query = target_query
-        
+        self.wrapping_events = []
+
+    def process_wrapping_events(self, content):
+        cnt = content or ''
+        for e in self.wrapping_events:
+            object.__getattribute__(e, '_obj').__content = cnt
+            cnt = e.__content
+        return cnt
+                    
     def render(self):
         resp = super(RTTemplateResponse, self).render()
         if not self.target_query is None:
             resp.content = json.dumps(dict(
                 target_query=self.target_query,
-                body=resp.content
+                body=self.process_wrapping_events(resp.content)
             ))
         return resp
         
@@ -227,6 +278,7 @@ class RTTemplateResponse(TemplateResponse):
         result = []
         for model in query:
             result.append(self.adapt_model(model))
+        self.wrapping_events.append(RTQueryProxy(query))
         return result
 
 
@@ -317,7 +369,8 @@ class RTView(TemplateView):
         Returns the event id for a given function object, event name and
         jquery string.
         '''
-        return quote(str(func)+str(name)+str(query))
+        return quote(
+            base64.urlsafe_b64encode(str(func))+str(name)+str(query))
     
     @classmethod
     def event(cls, name, query):
@@ -349,11 +402,38 @@ class RTView(TemplateView):
                 raise Exception('Event seems already registered? %s' % str(
                     cls.events[event_id]))
             
+            @wraps(func)
+            def pass_event_id(self_, request, **kwargs):
+                response = func(self_, request, **kwargs)
+                redis_connection = redis.Redis(
+                    connection_pool=redis_pool)
+
+                def callback(resp):
+                    for e in resp.wrapping_events:
+                        name = object.__getattribute__(e, '_name')
+                        app_label = object.__getattribute__(e, '_app_label')
+                        id = object.__getattribute__(e, '_id')
+                        redis_connection.sadd(
+                            (
+                                app_label +
+                                '%' +
+                                name +
+                                '%' +
+                                id
+                            ),
+                            event_id,
+                        )
+                
+                response.add_post_render_callback(callback)
+                
+                return response
+
             # register the event
-            cls.events[event_id] = (self_, func, name, query, dict(zip(
-                args, defaults)))
-            
-            return func
+            cls.events[event_id] = (
+                self_, pass_event_id, name, query, dict(zip(
+                    args, defaults)))
+
+            return pass_event_id
 
         return decorator
 
@@ -413,8 +493,12 @@ class RTManagement(TemplateView):
         for channel_name in redis_connection.smembers(
             settings.REDIS_KEY_CHANNELLIST
         ):
-            queues[channel_name] = redis_connection.smembers(
+            watchnevent = [[],[]]
+            watchnevent[0] = redis_connection.smembers(
                 settings.REDIS_KEY_PREFIX_WATCHLIST+channel_name)
+            #for descriptor in watchnevent[0]:
+            #    watchnevent[1] = redis_connection.smembers(descriptor)
+            queues[channel_name] = watchnevent
         
         context['watchlist'] = queues
         

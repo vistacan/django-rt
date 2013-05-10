@@ -10,7 +10,6 @@ class ExampleView(RTView):
     
     def get_context_data(self, **kwargs):
         context = super(ExampleView, self).get_context_data(**kwargs)
-        context['test_entries'] = Test.objects.all()
         context['title'] = RTObservable('title', {'value':'Hello'})
         return context
     
@@ -21,7 +20,15 @@ class ExampleView(RTView):
 
         return RTTemplateResponse(
             request,
-            Template('<div class="well">Result! {{result}}</div>'),
-            {'result': myinput},
-            target_query='#result',
+            Template(
+                '''<tbody>
+                {% for entry in test_entries %}
+                <tr><td>{{entry.name}}</td></tr>
+                {% endfor %}
+                </tbody>'''
+            ),
+            {
+                'test_entries': Test.objects.all(),
+            },
+            target_query='.table',
         )
