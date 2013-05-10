@@ -459,7 +459,8 @@ class RTJavascriptEvents(TemplateView):
         
         # collect all registered events in all subclasses
         for klass in subclasses:
-            events.append(klass.events)
+            events.append(dict(
+                [(SafeString(i), v) for i,v in klass.events.iteritems()]))
         
         context['events'] = events
         

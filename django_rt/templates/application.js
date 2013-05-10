@@ -76,17 +76,18 @@ function init_socket(){
 // Update DOM elements identified by `identifier` with `obj` values
 function update_watched_object(obj, identifier){
     // example: update_watched_object({name:'foo'}, 'django_rt%test%2');
-    for(k in watchlist){
-        // k is of format '<app_label>%<model_name>%<pk>%<field_name>'
-        // but the `identifier` does not contian the field name
-        // it identifies the full obj which is a model instance repr or
-	// an object ({emit:'event_id'}) 
-	// in case a query was updated
-        if(k.indexOf(identifier)==0){
-	    if('emit' in obj && obj.emit in events){
-		//emit it!
-		events[obj.emit]();
-	    } else {
+    if(identifier=='emit'){
+	if(''+obj in events){
+	    events[''+obj](true);
+	}
+    } else {
+	for(k in watchlist){
+            // k is of format '<app_label>%<model_name>%<pk>%<field_name>'
+            // but the `identifier` does not contian the field name
+            // it identifies the full obj which is a model instance repr or
+	    // an object ({emit:'event_id'}) 
+	    // in case a query was updated
+            if(k.indexOf(identifier)==0){
 		// get the field name and update the DOM
 		field_name = k.replace(identifier, '').substring(1);
 		// the element is a text element so we use `data`
@@ -125,7 +126,7 @@ function build_watchlist(jqresult){
             elem.data == '/'+ostr
         ){
 	    if(data_elem == null){
-		alert('TODO: Must handle empty data elements!');
+		console.log('TODO: Must handle empty data elements!');
 	    }
             // found the closing comment tag
             // store this occurence
@@ -162,42 +163,46 @@ function rtinit(){
             // event_id -> (
             //     self_, func, name, query, dict(zip(args, defaults)))
     events['{{event_id}}'] = 
-	function(){
-            $('{{event_tuple.3}}').one(
-		'{{event_tuple.2}}', 
-		function(eventObject){
+	function(fireIt){
+	    if(!fireIt){
+		$('{{event_tuple.3}}').one(
+		    '{{event_tuple.2}}', 
+		    function(eventObject){
 		
-                    var headers = {},
-                    csrf = $.cookie('csrftoken');
+			var headers = {},
+			csrf = $.cookie('csrftoken');
                     
-                    headers['X-CSRFToken'] = csrf;
-                    headers['X-Event-Id'] = '{{event_id}}';
+			headers['X-CSRFToken'] = csrf;
+			headers['X-Event-Id'] = '{{event_id}}';
     
-                    // Collect the required data to be send to the server
-                    // as specified inside the server side registered event 
-		    // handler function with keyword arguments and default 
-		    // values
-                    var data = {};
-                    // for{ {% for k, v in event_tuple.4.iteritems %}
-                    data['{{k}}'] = getValue('{{v}}');
-                    // } {% endfor %}
-    
-                    $.ajax({
-			url: document_url,
-			type: 'POST',
-			dataType: 'json',
-			headers: headers,
-			data: data,
-			success: function(data, textStatus, jqXHR) {
-                            data = eval(data);
-                            $(data['target_query']).html(data['body']);
-                            rtinit(); // re-init
-			},
-			error: function(request, status, error) { 
-			    alert(request.responseText); 
-			}
-                    });
-		});
+			// Collect the required data to be send to the server
+			// as specified inside the server side registered event 
+			// handler function with keyword arguments and default 
+			// values
+			var data = {};
+			// for{ {% for k, v in event_tuple.4.iteritems %}
+			data['{{k}}'] = getValue('{{v}}');
+			// } {% endfor %}
+			
+			$.ajax({
+			    url: document_url,
+			    type: 'POST',
+			    dataType: 'json',
+			    headers: headers,
+			    data: data,
+			    success: function(data, textStatus, jqXHR) {
+				data = eval(data);
+				$(data['target_query']).html(data['body']);
+				rtinit(); // re-init
+			    },
+			    error: function(request, status, error) { 
+				alert(request.responseText); 
+			    }
+			});
+		    });
+	    } else {
+		$('{{event_tuple.3}}').trigger('{{event_tuple.2}}');
+	    }
 	};
         // } {% endfor %}
     // } {% endfor %}
