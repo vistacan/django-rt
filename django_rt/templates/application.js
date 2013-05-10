@@ -111,9 +111,11 @@ function build_watchlist(jqresult){
         } else if(
             elem.nodeType === 8 && // comment
             ostr != null &&
-            elem.data == '/'+ostr &&
-            data_elem != null
+            elem.data == '/'+ostr
         ){
+	    if(data_elem == null){
+		alert('TODO: Must handle empty data elements!');
+	    }
             // found the closing comment tag
             // store this occurence
             watchlist[ostr] = data_elem;
@@ -179,8 +181,8 @@ function rtinit(){
                             $(data['target_query']).html(data['body']);
                             rtinit(); // re-init
 			},
-			error: function() { 
-			    alert('Error, your csrftoken is '+csrf); 
+			error: function(request, status, error) { 
+			    alert(request.responseText); 
 			}
                     });
 		});

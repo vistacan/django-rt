@@ -5,15 +5,19 @@ from django.conf import settings
 from django.db.models import Model
 from django.db.models.query import QuerySet
 from django.core.urlresolvers import reverse
+from django.utils.safestring import SafeString
+from django.contrib.contenttypes.models import ContentType
+from django.forms.models import model_to_dict
 
 from util import itersubclasses
-from models import RTModelProxy
 
 from urllib import quote
 import json
 from uuid import uuid4
 import redis
 from inspect import getargspec
+import base64
+
 
 redis_pool = redis.ConnectionPool()
 HTTP_X_EVENT_ID = 'HTTP_X_EVENT_ID'
@@ -38,12 +42,146 @@ RT_SCRIPT = '''
 '''
 
 
+class Struct:
+    def __init__(self, **entries):
+        self.__dict__.update(entries)
+
+
+class RTObservable(object):
+    def __init__(self, name, obj, app_label=None, id=None):
+        if type(obj) == dict:
+            obj = Struct(**obj)
+        self._obj = obj # the actual object wrapped
+        if id is None:
+            id = base64.urlsafe_b64encode(name) # tied to the name
+        if app_label is None:
+            app_label = '-'
+
+        self._name = name
+        self._app_label = app_label
+        self._id = id
+
+        # construct the object-identifier its format is:
+        # <app_label>%<name>%<pk>
+        object_identifier = str(app_label)+'%'+str(name)+'%'+str(id)
+        self._object_identifier = object_identifier
+
+        redis_connection = redis.Redis(connection_pool=redis_pool)
+        
+        # the channellist is a redis `set` that contains all channels
+        # bound to unique client sessions.
+        channellist = redis_connection.smembers(
+            settings.REDIS_KEY_CHANNELLIST) or []
+        for channel in channellist:
+            # each client session (channel) has a redis `set` containing
+            # object identifiers to keep watch of and update when
+            # values change -> whatchlist
+            redis_connection.sadd(
+                settings.REDIS_KEY_PREFIX_WATCHLIST+channel,
+                object_identifier)
+
+    def __getattribute__(self, name):
+        '''
+        Wrap all attributes retrieved in comments containing this
+        object_identifier.
+        TODO: Handle relationships.
+        '''
+        # dirty hack
+        if name in ['set_changed', '__dict__']:
+            return object.__getattribute__(self, name)
+        
+        attr = getattr(object.__getattribute__(self, "_obj"), name)
+        object_identifier = object.__getattribute__(
+            self,
+            "_object_identifier"
+        )
+        ostr = '<!--%s-->' % (object_identifier + '%' + name)
+        cstr = '<!--/%s-->' % (object_identifier + '%' + name)
+        return SafeString(ostr + attr + cstr)
+
+    def set_changed(self):
+        obj = object.__getattribute__(self, '_obj')
+        name = object.__getattribute__(self, '_name')
+        app_label = object.__getattribute__(self, '_app_label')
+        id = object.__getattribute__(self, '_id')
+        RTObservable.emit_change(
+            name, obj, app_label, id
+        )
+        
+    @classmethod
+    def emit_change(cls, name, obj, app_label=None, id=None):
+        if isinstance(obj, Struct):
+            obj = obj.__dict__
+        if id is None:
+            id = base64.urlsafe_b64encode(name) # tied to the name
+        if app_label is None:
+            app_label = '-'
+        redis_connection = redis.Redis(connection_pool=redis_pool)
+        channellist = redis_connection.smembers(
+            settings.REDIS_KEY_CHANNELLIST) or []
+        for channel in channellist:
+            watchlist = redis_connection.smembers(
+                settings.REDIS_KEY_PREFIX_WATCHLIST+channel) or []
+            for descriptor in watchlist:
+                _app_label, _name, _pk = descriptor.split("%")
+                if all([
+                    _app_label == app_label,
+                    _name == name,
+                    _pk == str(id)
+                ]):
+                    redis_connection.rpush(
+                        channel,
+                        json.dumps({descriptor:obj}))
+
+
+class RTModelProxy(RTObservable):
+    '''
+    A proxy for Model instances. After inspecting the template context
+    any Model instance will be wrapped in an instance of RTModelProxy.
+    The proxy does no modifications to the Model or data it wraps any
+    attribute retrieved into a string:
+        "<!--`object-identifier`-->`original`<!--/`object-identifier`-->
+    so the client side script can relocate and modify its value when
+    database entries change.
+    '''
+    
+    def __init__(self, obj):
+        ct = ContentType.objects.get_for_model(obj)
+        super(RTModelProxy, self).__init__(
+            ct.model,
+            obj,
+            ct.app_label,
+            obj.pk
+        )
+
+    @classmethod
+    def emit_change(cls, obj, app_label=None, id=None):
+        ct = ContentType.objects.get_for_model(obj)
+        RTObservable.emit_change(
+            ct.model, model_to_dict(obj), ct.app_label, obj.pk)
+
 class RTTemplateResponse(TemplateResponse):
     '''
     A TemplateResponse subclass to inspect the context and wrap all
     model instances into `RTModelProxy` instances.
     '''
-    
+
+    def __init__(self, *args, **kwargs):
+        target_query = kwargs.pop('target_query', None)
+        if not target_query is None:
+            kwargs.update({'content_type': 'application/json'})
+        super(RTTemplateResponse, self).__init__(*args, **kwargs)
+        self.target_query = target_query
+        
+    def render(self):
+        resp = super(RTTemplateResponse, self).render()
+        if not self.target_query is None:
+            resp.content = json.dumps(dict(
+                target_query=self.target_query,
+                body=resp.content
+            ))
+        return resp
+        
     def resolve_context(self, context):
         '''
         Main entry point to inspect the context.
@@ -281,20 +419,3 @@ class RTManagement(TemplateView):
         context['watchlist'] = queues
         
         return context
-
-
-class RTResponse(HttpResponse):
-    '''
-    An HttpResponse subclass meant to be used for client side event
-    results. The RTResponse needs next to its body contents, a jQuery
-    std query string to deter?ne where this response will be
-    injected into the DOM.
-    '''
-    def __init__(self, target_query, body):
-        super(RTResponse, self).__init__(
-            content=json.dumps(dict(
-                target_query=target_query,
-                body=body,
-            )),
-            mimetype='application/json'
-        )
