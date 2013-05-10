@@ -51,6 +51,7 @@ Write a class based view handler subclass from `RTView` for you base page.
 		def get_context_data(self, **kwargs):
 			context = super(ExampleView, self).get_context_data(**kwargs)
 			context['entries'] = ['a', 'b', 'c']
+			return context
 
 Add client side event handlers to your view handler:
 
@@ -64,6 +65,13 @@ node with `id` equal to `mybutton` is emitted. The value of the DOM node with
 `id` equal to `myinput` is supplied and will be transfered through the
 `gathered` keyword argument. Yes, the default value of this argument is used
 to determine the jQuery query string to gather desired information.
+
+Startup
+-------
+
+Run `redis-server` then start `node django_rt/node/server.js`. If all goes
+well execute `manage.py runserver` and load (http://localhost:8000) in your
+browser.
 
 RTContext and Models
 --------------------
@@ -99,6 +107,7 @@ example.
 		def get_context_data(self, **kwargs):
 			context = super(ExampleView, self).get_context_data(**kwargs)
 			context['entries'] = Entry.objects.all()
+			return context
 
 Now add some entries and fire up the page in your browser. Keep it open while
 you make changes to the viewed entries and observe it change realtime in your
