@@ -1,3 +1,22 @@
+import json
+import decimal
+import datetime
+
+
+class RTEncoder(json.JSONEncoder):
+    def _iterencode(self, o, markers=None):
+        if isinstance(o, decimal.Decimal):
+            # wanted a simple yield str(o) in the next line,
+            # but that would mean a yield on the line with super(...),
+            # which wouldn't work (see my comment below), so...
+            return (str(o) for o in [o])
+        if type(o) == datetime.date:
+            return (o.strftime('%Y-%m-%d'))
+        if type(o) in [datetime.datetime, datetime.time]:
+            return (o.isoformat())
+        return super(RTEncoder, self)._iterencode(o, markers)
+
+
 ## {{{ http://code.activestate.com/recipes/576949/ (r3)
 def itersubclasses(cls, _seen=None):
     """

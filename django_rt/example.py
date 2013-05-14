@@ -12,12 +12,9 @@ class ExampleView(RTView):
         context = super(ExampleView, self).get_context_data(**kwargs)
         context['title'] = RTObservable('title', {'value':'Hello'})
         return context
-    
-    @RTView.event('click', '#mybutton')
-    def mybutton_click(self, request, myinput='#myinput'):
-        
-        RTObservable('title', {'value':myinput}).set_changed()
 
+    @RTView.event('load', 'body')
+    def body_load(self, request):
         return RTTemplateResponse(
             request,
             Template(
@@ -32,3 +29,10 @@ class ExampleView(RTView):
             },
             target_query='.table',
         )
+        
+    @RTView.event('click', '#mybutton')
+    def mybutton_click(self, request, myinput='#myinput'):
+        
+        RTObservable('title', {'value':myinput}).set_changed()
+
+        return RTView.empty_response()

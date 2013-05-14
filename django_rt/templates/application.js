@@ -14,7 +14,10 @@
 // Collects the value from a jQuery std query
 // Used to collect client side data sent to the
 // server to fuel RTView.event decorated functions
-function getValue(query){
+function getValue(query, scope){
+    if(query=='$(this)'){
+	return getValue(scope);
+    }
     var val = $(query).val();
     if(val){
         return val;
@@ -109,14 +112,20 @@ function build_watchlist(jqresult){
     var ostr = null,        // the opening comment
         elem = null,        // the current element
         data_elem = null,   // the text element
+        match = null,       // the data matched againts /\%/g
         conts = jqresult.contents();
         
     for(var i=0; i<conts.length; i++){
         elem = conts[i];
+	if(elem && elem.data){
+	    match = elem.data.match(/\%/g) || [];
+	} else {
+	    match = [];
+	}
         if(
            elem.nodeType === 8 && // comment
            ostr == null &&
-           elem.data.match(/\%/g).length == 3 // format check
+           match.length == 3 // format check
         ){
             // found the opening comment tag
             ostr = elem.data;
@@ -151,7 +160,7 @@ function build_watchlist(jqresult){
 
 // Main initializer function for Django RT.
 // This function is executed after each event!
-function rtinit(){
+function rtinit(load_body){
 
     var document_url = ''+ document.location;
 
@@ -167,6 +176,7 @@ function rtinit(){
 	    if(!fireIt){
 		$('{{event_tuple.3}}').one(
 		    '{{event_tuple.2}}', 
+		    {},
 		    function(eventObject){
 		
 			var headers = {},
@@ -181,7 +191,7 @@ function rtinit(){
 			// values
 			var data = {};
 			// for{ {% for k, v in event_tuple.4.iteritems %}
-			data['{{k}}'] = getValue('{{v}}');
+			data['{{k}}'] = getValue('{{v}}', this);
 			// } {% endfor %}
 			
 			$.ajax({
@@ -196,9 +206,14 @@ function rtinit(){
 				rtinit(); // re-init
 			    },
 			    error: function(request, status, error) { 
-				alert(request.responseText); 
+				if(request.responseText)
+				    alert(request.responseText); 
+				else
+				    rtinit();
 			    }
 			});
+
+			return false;
 		    });
 	    } else {
 		$('{{event_tuple.3}}').trigger('{{event_tuple.2}}');
@@ -213,6 +228,13 @@ function rtinit(){
 
     build_watchlist($('body'));
 
+    if(load_body){
+	$('body').trigger('load');
+    }
+
+    $('body').trigger('inited');
 }
 
-$(rtinit);
+$(function(){
+    rtinit(true);
+});

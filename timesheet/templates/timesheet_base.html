@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Timesheet</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link href="/static/bootstrap/css/bootstrap.min.css" rel="stylesheet" media="screen">
+        <link href="/static/datepicker/css/datepicker.css" rel="stylesheet" media="screen">
+        <script src="/static/bootstrap/js/bootstrap.min.js"></script>
+
+	<style type="text/css">
+	  .align-right {
+	      text-align: right!important;
+	  }
+
+	  th {
+	      text-align:center!important;
+	  }
+	</style>
+    </head>
+    <body>
+        <div class="container">
+	  <div class="hero-unit">
+	    <h1>{{title.value}}</h1>
+	    <p>{{title.tag}}</p>
+	  </div>
+	  <p class="contents">
+	  </p>
+        </div>
+    </body>
+    <script type="text/javascript">
+	  script(
+	      "/static/datepicker/js/bootstrap-datepicker.js", 
+	      function(){
+	          $('body').on('inited', function(){
+		      $('.datepicker').datepicker({format:'yyyy-mm-dd'});
+		  });
+	      }
+	   );
+    </script>
+</html>

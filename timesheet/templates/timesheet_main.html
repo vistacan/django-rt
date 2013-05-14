@@ -1,0 +1,35 @@
+<table class="table table-bordered table-striped">
+  <thead>
+    <tr>
+      <th class="span3"></th>
+      <th>Date</th>
+      <th>Hours</th>
+      <th class="span7">Description</th>
+  </thead>
+  <tbody>
+    {% for entry in entries %}
+    <tr>
+      <td>
+	<button class='declare btn btn-block' value='{{entry.pk}}'>Declare</btn></td>
+      <td class="align-right">{{entry.date}}</td>
+      <td class="align-right">{{entry.hours}}</td>
+      <td>{{entry.description}}</td>
+    </tr>
+    {% endfor %}
+    <tr>
+      <td>
+	<button id='newbutton' class='btn btn-block btn-success'>New</td>
+      </td>
+      <td>
+	<input type='date' id='newdate' 
+		 class='input-small pull-right'/>
+      </td>
+      <td>
+	<input type='number' id='newhours' class="input-small pull-right" />
+      </td>
+      <td>
+	<input type='text' id='newdescription' class='span7' />
+      </td>
+    </tr>
+  </tbody>
+</table>

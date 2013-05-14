@@ -9,7 +9,7 @@ from django.utils.safestring import SafeString
 from django.contrib.contenttypes.models import ContentType
 from django.forms.models import model_to_dict
 
-from util import itersubclasses
+from util import itersubclasses, RTEncoder
 
 from urllib import quote
 from functools import wraps
@@ -18,6 +18,8 @@ from uuid import uuid4
 import redis
 from inspect import getargspec
 import base64
+import traceback
+import StringIO
 
 
 redis_pool = redis.ConnectionPool()
@@ -49,6 +51,9 @@ class Struct():
 
 
 class RTObservable(object):
+
+    skip_fields=set()
+    
     def __init__(self, name, obj, app_label=None, id=None):
         if type(obj) == dict:
             obj = Struct(**obj)
@@ -88,17 +93,21 @@ class RTObservable(object):
         TODO: Handle relationships.
         '''
         # dirty hack
-        if name in ['set_changed', '__dict__']:
+        if name in ['set_changed', '__dict__', 'skip_fields']:
             return object.__getattribute__(self, name)
         
         attr = getattr(object.__getattribute__(self, "_obj"), name)
+
+        if name in self.skip_fields:
+            return attr
+        
         object_identifier = object.__getattribute__(
             self,
             "_object_identifier"
         )
         ostr = '<!--%s-->' % (object_identifier + '%' + name)
         cstr = '<!--/%s-->' % (object_identifier + '%' + name)
-        return SafeString(ostr + attr + cstr)
+        return SafeString(ostr + str(attr) + cstr)
 
     def set_changed(self):
         obj = object.__getattribute__(self, '_obj')
@@ -117,42 +126,45 @@ class RTObservable(object):
             id = base64.urlsafe_b64encode(name) # tied to the name
         if app_label is None:
             app_label = '-'
+        
         redis_connection = redis.Redis(connection_pool=redis_pool)
+        
         channellist = redis_connection.smembers(
             settings.REDIS_KEY_CHANNELLIST) or []
-        for channel in channellist:
-            watchlist = redis_connection.smembers(
-                settings.REDIS_KEY_PREFIX_WATCHLIST+channel) or []
-            for descriptor in watchlist:
-                _app_label, _name, _pk = descriptor.split("%")
-                if all([
-                    _app_label == app_label,
-                    _name == name,
-                    _pk == str(id)
-                ]):
-                    if not _pk == 'Q':
+
+        if str(id) != 'Q':
+            for channel in channellist:
+                watchlist = redis_connection.smembers(
+                    settings.REDIS_KEY_PREFIX_WATCHLIST+channel) or []
+                for descriptor in watchlist:
+                    _app_label, _name, _pk = descriptor.split("%")
+                    if all([
+                        _app_label == app_label,
+                        _name == name,
+                        _pk == str(id)
+                    ]):
                         redis_connection.rpush(
                             channel,
-                            json.dumps({descriptor:obj}))
-                    else:
-                        # this is query, somehow we need to
-                        # find out which client-side event to
-                        # emit on the client and send
-                        # {emit:[source_query, event_name]}
-                        # to the client
-                        eventids = redis_connection.smembers(
-                            (
-                                app_label +
-                                '%' +
-                                name +
-                                '%' +
-                                str(id)
-                            ))
-                        for event_id in eventids:
-                            redis_connection.rpush(
-                                channel,
-                                json.dumps({'emit':event_id})
-                            )
+                            json.dumps({descriptor:obj}, cls=RTEncoder))
+        else:
+            # this is a query, somehow we need to
+            # find out which client-side event to
+            # emit and send
+            # {emit:event_id}
+            # to the client
+            eventids = redis_connection.smembers(
+                (
+                    app_label +
+                    '%' +
+                    name +
+                    '%Q'
+                ))
+            for channel in channellist:
+                for event_id in eventids:
+                    redis_connection.rpush(
+                        channel,
+                        json.dumps({'emit':event_id})
+                    )
 
 
 class RTQueryProxy(RTObservable):
@@ -166,7 +178,7 @@ class RTQueryProxy(RTObservable):
             ct.model,
             {},
             ct.app_label,
-            'Q'
+            'Q',
         )
 
     @classmethod
@@ -187,6 +199,8 @@ class RTModelProxy(RTObservable):
     so the client side script can relocate and modify its value when
     database entries change.
     '''
+
+    skip_fields = ('id', 'pk')
     
     def __init__(self, obj):
         ct = ContentType.objects.get_for_model(obj)
@@ -201,7 +215,9 @@ class RTModelProxy(RTObservable):
     def emit_change(cls, obj):
         ct = ContentType.objects.get_for_model(obj)
         RTObservable.emit_change(
-            ct.model, model_to_dict(obj), ct.app_label, obj.pk)
+            ct.model, model_to_dict(obj),
+            ct.app_label, obj.pk
+        )
 
 class RTTemplateResponse(TemplateResponse):
     '''
@@ -340,10 +356,11 @@ class RTView(TemplateView):
                 response = handler_info[1](
                     handler_info[0], request, **kwargs)
             
-            except Exception, e:
+            except:
                 if settings.DEBUG:
-                    # graceful error handling
-                    response = HttpResponse('Error' + str(e))
+                    strbuf = StringIO.StringIO()
+                    traceback.print_exc(50, strbuf)
+                    response = HttpResponse('Error:\n' + strbuf.getvalue())
                 else:
                     raise
             return response
@@ -358,7 +375,9 @@ class RTView(TemplateView):
                 ) + resp.content[pos:]
         
         response = super(RTView, self).dispatch(request, *args, **kwargs)
-        response.add_post_render_callback(inject_javascript)
+        if not response is None and hasattr(
+            response, 'add_post_render_callback'):
+            response.add_post_render_callback(inject_javascript)
         
         return response
         
@@ -371,7 +390,13 @@ class RTView(TemplateView):
         '''
         return quote(
             base64.urlsafe_b64encode(str(func))+str(name)+str(query))
+
+
+    @classmethod
+    def empty_response(cls):
+        return HttpResponse('')
     
+        
     @classmethod
     def event(cls, name, query):
         '''
@@ -396,6 +421,10 @@ class RTView(TemplateView):
             
             self_ = args[0] # the instance
             args = args[2:] # strip self, request
+
+            argsndefaults = {}
+            if len(args) > 0 and len(args) == len(defaults):
+                argsndefaults = dict(zip(args, defaults))
             
             # do not allow duplicates
             if event_id in cls.events:
@@ -423,15 +452,16 @@ class RTView(TemplateView):
                             ),
                             event_id,
                         )
-                
-                response.add_post_render_callback(callback)
+
+                if not response is None and hasattr(
+                    response, 'add_post_render_callback'):
+                    response.add_post_render_callback(callback)
                 
                 return response
 
             # register the event
             cls.events[event_id] = (
-                self_, pass_event_id, name, query, dict(zip(
-                    args, defaults)))
+                self_, pass_event_id, name, query, argsndefaults )
 
             return pass_event_id
 
