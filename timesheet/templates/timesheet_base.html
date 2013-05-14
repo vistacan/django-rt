@@ -22,6 +22,9 @@
 	  <div class="hero-unit">
 	    <h1>{{title.value}}</h1>
 	    <p>{{title.tag}}</p>
+	    <button id='showdeclared' class="btn btn-primary btn-large">
+	      {{title.declared}}
+	    </button>
 	  </div>
 	  <p class="contents">
 	  </p>
@@ -33,6 +36,12 @@
 	      function(){
 	          $('body').on('inited', function(){
 		      $('.datepicker').datepicker({format:'yyyy-mm-dd'});
+		      if($('#showdeclared').text().indexOf("Don't")!=-1){
+			  $('.declare').hide();
+		      }
+		      else{
+			  $('.declare').show();
+		      }
 		  });
 	      }
 	   );

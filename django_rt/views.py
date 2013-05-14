@@ -117,6 +117,7 @@ class RTObservable(object):
         RTObservable.emit_change(
             name, obj, app_label, id
         )
+        return self
         
     @classmethod
     def emit_change(cls, name, obj, app_label=None, id=None):

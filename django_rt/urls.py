@@ -1,6 +1,5 @@
 from django.conf.urls import patterns, include, url
 from views import RTJavascriptEvents, RTManagement
-from example import ExampleView
 from django.views.decorators.csrf import ensure_csrf_cookie
 import timesheet.urls
 
@@ -12,7 +11,6 @@ urlpatterns = patterns('',
     url(r'^rt/admin', RTManagement.as_view(), name='admin'),
     url(r'^rt/application.js', ensure_csrf_cookie(RTJavascriptEvents.as_view()), name='application_js'),
     url(r'^time/.*', include(timesheet.urls)),
-    url(r'^rt/.*', ExampleView.as_view(), name='example'),
                        
     # Uncomment the admin/doc line below to enable admin documentation:
     # url(r'^admin/doc/', include('django.contrib.admindocs.urls')),
