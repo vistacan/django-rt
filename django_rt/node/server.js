@@ -2,7 +2,7 @@ var redis = require('redis'),
     app = require('http').createServer(handler),
     io = require('socket.io').listen(app);
 
-app.listen(8080);
+app.listen(8887);
 
 queues = {};
 

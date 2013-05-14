@@ -34,7 +34,7 @@ RT_SCRIPT = '''
     script("%s", function(){
         console.log('Loaded: application.js');
         script(
-            "//"+document.domain+":8080/socket.io/socket.io.js",
+            "//"+document.domain+":8887/socket.io/socket.io.js",
             function(){
                 console.log('Loaded: socket.io.js');
                 init_socket();
