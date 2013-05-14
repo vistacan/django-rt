@@ -50,7 +50,7 @@ function init_socket(){
     // TODO: Get server info from the settings
     // {% endcomment %}
     
-    socket = io.connect('//'+document.domain+':8080');
+    socket = io.connect('//'+document.domain+':8887');
     
     socket.on('connect', function(){
         // Send this client's channel name to the server
