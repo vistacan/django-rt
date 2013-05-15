@@ -13,7 +13,11 @@ middleware here, or combine a Django application with an application of another
 framework.
 
 """
-import os
+import os, sys
+
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+
+sys.path.append(os.path.join(PROJECT_ROOT, '..'))
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "django_rt.settings")
 

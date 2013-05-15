@@ -17,7 +17,9 @@ function poll(queue_name, redis_client) {
 		     queue_name + 
 		     '\n    data: ' + 
 		     data);
-        io.sockets.in(queue_name).emit(queue_name, data[1])
+	if(data){
+            io.sockets.in(queue_name).emit(queue_name, data[1])
+	}
     });
 }
 
