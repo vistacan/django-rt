@@ -42,7 +42,7 @@ def update_total_hours(request):
                 last_declared
             ),
             'declared': 'Show Billed Entries' if
-            not show_declared else "Don't Show Billed Entries'"
+            not show_declared else "Don't Show Billed Entries"
         },
         app_label = request.session.session_key
     ).set_changed()
