@@ -158,7 +158,11 @@ class MainView(RTView):
             
         RTObservable(
             'title',
-            {'value':'Timesheet', 'tag':message},
+            {
+                'value':'Timesheet',
+                'tag':message,
+                'declared': '',
+            },
             app_label = request.session.session_key
         ).set_changed()
         

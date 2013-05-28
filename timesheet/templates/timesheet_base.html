@@ -31,11 +31,21 @@
         </div>
     </body>
     <script type="text/javascript">
+      function checkInput(type) {
+	  var input = document.createElement("input");
+	  input.setAttribute("type", type);
+	  var result = input.type == type;
+	  delete input;
+	  return result;
+      }
+
 	  script(
 	      "/static/datepicker/js/bootstrap-datepicker.js", 
 	      function(){
 	          $('body').on('inited', function(){
-		      $('.datepicker').datepicker({format:'yyyy-mm-dd'});
+		      if(!checkInput('date'))
+			  $('.datepicker').datepicker(
+			      {format:'yyyy-mm-dd'});
 		      if($('#showdeclared').text().indexOf("Don't")!=-1){
 			  $('.declare').hide();
 		      }
