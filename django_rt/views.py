@@ -347,8 +347,14 @@ class RTView(TemplateView):
                 kwargs[str(k)] = v
                 
             # retrieve the decorated function
-            handler_info =  self.__class__.events[
-                request.META[HTTP_X_EVENT_ID]]
+            try:
+                handler_info =  self.__class__.events[
+                    request.META[HTTP_X_EVENT_ID]]
+            except KeyError:
+                raise Exception('Could not locate event %s in my dict %s' % (
+                    request.META[HTTP_X_EVENT_ID],
+                    str(self.__class__.events)
+                ))
             
             # handler_info is a tuple (instance, function)
             
@@ -390,7 +396,7 @@ class RTView(TemplateView):
         jquery string.
         '''
         return quote(
-            base64.urlsafe_b64encode(str(func))+str(name)+str(query))
+            base64.urlsafe_b64encode(func.func_name)+str(name)+str(query))
 
 
     @classmethod
