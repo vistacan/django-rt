@@ -133,9 +133,6 @@ function build_watchlist(jqresult){
             ostr != null &&
             elem.data == '/'+ostr
         ){
-	    if(data_elem == null){
-		console.log('TODO: Must handle empty data elements!');
-	    }
             // found the closing comment tag
             // store this occurence
             watchlist[ostr] = data_elem;
@@ -159,7 +156,7 @@ function build_watchlist(jqresult){
 
 // Main initializer function for Django RT.
 // This function is executed after each event!
-function rtinit(load_body){
+function rtinit(load_body, call_next){
 
     var document_url = ''+ document.location;
 
@@ -230,10 +227,10 @@ function rtinit(load_body){
     if(load_body){
 	$('body').trigger('load');
     }
+    
+    if(call_next){
+	call_next();
+    }
 
     $('body').trigger('inited');
 }
-
-$(function(){
-    rtinit(true);
-});

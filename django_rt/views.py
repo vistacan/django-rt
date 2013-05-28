@@ -37,7 +37,9 @@ RT_SCRIPT = '''
             "//"+document.domain+":8887/socket.io/socket.io.js",
             function(){
                 console.log('Loaded: socket.io.js');
-                init_socket();
+                $(function(){
+                    rtinit(true, function(){init_socket();});
+                });
             }
         );
     });
