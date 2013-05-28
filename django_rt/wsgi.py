@@ -19,7 +19,8 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 sys.path.append(os.path.join(PROJECT_ROOT, '..'))
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "django_rt.settings")
+#os.environ.setdefault("DJANGO_SETTINGS_MODULE", "django_rt.settings")
+os.environ['DJANGO_SETTINGS_MODULE'] = "django_rt.settings"
 
 # This application object is used by any WSGI server configured to use this
 # file. This includes Django's development server, if the WSGI_APPLICATION

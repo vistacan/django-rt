@@ -78,7 +78,6 @@ function init_socket(){
 
 // Update DOM elements identified by `identifier` with `obj` values
 function update_watched_object(obj, identifier){
-    // example: update_watched_object({name:'foo'}, 'django_rt%test%2');
     if(identifier=='emit'){
 	if(''+obj in events){
 	    events[''+obj](true);
