@@ -36,13 +36,13 @@ def update_total_hours(request):
         'title',
         {
             'value':'Timesheet',
-            'tag':'Undeclared hours total '+str(
+            'tag':'Unbilled hours total '+str(
                 total_hours
             ) + ' since ' + str(
                 last_declared
             ),
-            'declared': 'Show Declared Entries' if
-            not show_declared else "Don't Show Declared Entries'"
+            'declared': 'Show Billed Entries' if
+            not show_declared else "Don't Show Billed Entries'"
         },
         app_label = request.session.session_key
     ).set_changed()
