@@ -1,6 +1,23 @@
 var redis = require('redis'),
     app = require('http').createServer(handler),
-    io = require('socket.io').listen(app);
+    io = require('socket.io').listen(app),
+    memwatch = require('memwatch');
+
+memwatch.on('leak', function(info) {
+    console.log('LEAK!!!!');
+    log_obj(info);
+});
+
+memwatch.on('stats', function(stats) {
+    console.log('Stats:');
+    log_obj(stats);
+});
+
+function log_obj(obj){
+    for(k in obj){
+        console.log('  '+k+': '+obj[k]);
+    }
+}
 
 var SOCK_TIMEOUT = 1000*60*60; // 1 hour
 
