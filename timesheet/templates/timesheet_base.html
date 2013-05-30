@@ -44,15 +44,16 @@
 	      "/static/datepicker/js/bootstrap-datepicker.js", 
 	      function(){
 	          $('body').on('inited', function(){
-		      if(!checkInput('date'))
-			  $('.datepicker').datepicker(
-			      {format:'yyyy-mm-dd'});
 		      if($('#showdeclared').text().indexOf("Don't")!=-1){
 			  $('.declare').hide();
 		      }
 		      else{
 			  $('.declare').show();
 		      }
+		      if(!checkInput('date'))
+			  $('.datepicker').datepicker(
+			      {format:'yyyy-mm-dd'});
+		      
 		  });
 	      }
 	   );

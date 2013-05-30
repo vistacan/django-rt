@@ -2,6 +2,8 @@ var redis = require('redis'),
     app = require('http').createServer(handler),
     io = require('socket.io').listen(app);
 
+var SOCK_TIMEOUT = 1000; //1000*60*60; // 1 hour
+
 app.listen(8887);
 
 queues = {};
@@ -18,6 +20,7 @@ function poll(queue_name, redis_client) {
 		     '\n    data: ' + 
 		     data);
 	if(data!==undefined){
+	    queues[queue_name].last_update = new Date();
             io.sockets.in(queue_name).emit(queue_name, data[1])
 	}
     });
@@ -41,7 +44,8 @@ io.sockets.on('connection', function (socket) {
             }, 100);
             queues[queue_name] = {
                 interval:interval,
-                redis_client:redis_client
+                redis_client:redis_client,
+		last_update:new Date()
             };
         }
     });
@@ -50,10 +54,28 @@ io.sockets.on('connection', function (socket) {
             console.warn('Disconnected '+queue_name);
             client_list = io.sockets.clients(queue_name);
             if(client_list.length==0){
-                clearInterval(queueus[queue_name].interval);
-                queues[queue_name].redis_client.end();
-                queues[queue_name] = false;
+		purge_socket(queues[queue_name]);
             }
         }
     });
 });
+
+function purge_socket(sock_obj){
+    console.warn('purging socket: '+sock_obj);
+    clearInterval(sock_obj.interval);
+    sock_obj.redis_client.end();
+    sock_obj = null;
+}
+
+function check_timeouts(){
+    var date_now = new Date();
+    for(k in queues){
+	if(date_now - queues[k].last_update > SOCK_TIMEOUT){
+	    purge_socket(queues[k]);
+	}
+    }
+}
+
+setInterval(function(){
+    check_timeouts();
+}, 60000);
