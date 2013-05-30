@@ -2,7 +2,7 @@ var redis = require('redis'),
     app = require('http').createServer(handler),
     io = require('socket.io').listen(app);
 
-var SOCK_TIMEOUT = 1000; //1000*60*60; // 1 hour
+var SOCK_TIMEOUT = 1000*60*60; // 1 hour
 
 app.listen(8887);
 
